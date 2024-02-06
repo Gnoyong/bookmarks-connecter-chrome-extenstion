@@ -1,4 +1,40 @@
-<script setup></script>
+<script lang="ts" setup>
+import { ref, onMounted } from "vue";
+import { ElNotification } from "element-plus";
+let storageCache = {};
+
+const config = ref({
+  host: "http://127.0.0.1:3000",
+  sync: {
+    enable: false,
+    retryInterval: 3000,
+  },
+});
+
+onMounted(() => {
+  chrome.storage.sync.get("config").then((items) => {
+    Object.assign(storageCache, items);
+    console.log("items", items);
+    console.log("storageCache", storageCache);
+    if (storageCache && storageCache.config) {
+      config.value = Object.assign({}, config.value, storageCache.config);
+    } else {
+      console.log("no cache");
+    }
+  });
+});
+
+function save() {
+  chrome.storage.sync.set({ config: config.value }).then(() => {
+    ElNotification({
+      title: "Success",
+      message: "Config saved",
+      type: "success",
+      position: "bottom-right",
+    });
+  });
+}
+</script>
 <template>
   <div class="c01140">
     <div class="c015432">
@@ -7,7 +43,9 @@
         <template #header>
           <div class="card-header">
             <span>Card Name</span>
-            <el-button class="button" type="primary" text bg>Save</el-button>
+            <el-button class="button" type="primary" text bg @click="save"
+              >Save</el-button
+            >
           </div>
         </template>
         <table>
@@ -18,12 +56,30 @@
             <th>Control</th>
           </thead>
           <tbody>
-            <td label="Name">Host</td>
-            <td label="Description">Host IP</td>
-            <td label="Default" :span="2">127.0.0.1</td>
-            <td label="Control">
-              <el-input v-model="input" placeholder="Please input" />
-            </td>
+            <tr>
+              <td label="Name">Sync</td>
+              <td label="Description">Enable synchronization</td>
+              <td label="Default" :span="2">Disable</td>
+              <td label="Control">
+                <el-switch v-model="config.sync.enable" />
+              </td>
+            </tr>
+            <tr>
+              <td label="Name">Host</td>
+              <td label="Description">Host IP</td>
+              <td label="Default" :span="2">http://127.0.0.1:3000</td>
+              <td label="Control">
+                <el-input v-model="config.host" placeholder="Please input" />
+              </td>
+            </tr>
+            <tr>
+              <td label="Name">Retry interval(ms)</td>
+              <td label="Description">-</td>
+              <td label="Default" :span="2">3000</td>
+              <td label="Control">
+                <el-input v-model.number="config.sync.retryInterval" />
+              </td>
+            </tr>
           </tbody>
         </table>
       </el-card>
@@ -47,7 +103,7 @@ th {
 }
 
 td:first-child {
-  width: 20%;
+  width: 25%;
   font-weight: bold;
 }
 
@@ -57,7 +113,7 @@ td:nth-child(3) {
 }
 
 td:nth-child(4) {
-  width: 30%;
+  width: 25%;
 }
 
 h1 {

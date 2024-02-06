@@ -1,6 +1,8 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import GeneralView from '../views/GeneralView.vue'
+import ChangelogView from '../views/ChangelogView.vue'
+import BookmarksView from '../views/BookmarksView.vue'
 
 const router = createRouter({
   // history: createWebHistory(import.meta.env.BASE_URL),
@@ -23,6 +25,16 @@ const router = createRouter({
       path: '/general',
       name: 'general',
       component: GeneralView
+    },
+    {
+      path: '/changelog',
+      name: 'changelog',
+      component: ChangelogView
+    },
+    {
+      path: '/bookmarks',
+      name: 'bookmarks',
+      component: BookmarksView
     }
   ]
 })

@@ -17,10 +17,7 @@ const handleClose = (key: string, keyPath: string[]) => {
   <div class="factory-layout">
     <!-- 顶部标题 -->
     <el-header class="header">
-      <el-radio-group v-model="isCollapse" style="">
-        <el-radio-button :label="false">expand</el-radio-button>
-        <el-radio-button :label="true">collapse</el-radio-button>
-      </el-radio-group>
+      <h2>Bookmarks Connecter</h2>
     </el-header>
     <!-- 侧边栏 -->
     <el-aside class="sidebar">
@@ -31,19 +28,21 @@ const handleClose = (key: string, keyPath: string[]) => {
         @open="handleOpen"
         @close="handleClose"
       >
+        <h1>Options</h1>
+        <el-divider />
         <el-menu-item index="1" @click="goto('/general')">
           <el-icon><Operation /></el-icon>
           <template #title>General</template>
         </el-menu-item>
-        <el-menu-item index="2" disabled>
+        <el-menu-item index="2" @click="goto('/bookmarks')">
           <el-icon><Collection /></el-icon>
           <template #title>Bookmarks</template>
         </el-menu-item>
-        <el-menu-item index="3" disabled>
+        <el-menu-item index="3" @click="goto('/changelog')">
           <el-icon><document /></el-icon>
           <template #title>Changelog</template>
         </el-menu-item>
-        <el-menu-item index="3" @click="goto('/about')">
+        <el-menu-item index="4" @click="goto('/about')">
           <el-icon><More /></el-icon>
           <template #title>About</template>
         </el-menu-item>
@@ -62,9 +61,10 @@ const handleClose = (key: string, keyPath: string[]) => {
 <style scoped>
 .el-menu-vertical-demo {
   height: 100%;
+  background: none;
+  padding: 30px 25px 0px 50px;
 }
 el-menu .el-menu-vertical-demo:not(.el-menu--collapse) {
-  width: 200px;
   min-height: 400px;
 }
 .factory-layout {
@@ -82,10 +82,8 @@ el-menu .el-menu-vertical-demo:not(.el-menu--collapse) {
 }
 
 .sidebar {
-  width: auto;
-  color: #fff;
+  width: 340px;
 }
-
 .content {
   flex: 1;
   width: 800px;

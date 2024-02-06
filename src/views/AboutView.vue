@@ -1,7 +1,19 @@
 <template>
-  <div class="about">
-    <h1>This is an about page</h1>
-  </div>
+  <h1>About</h1>
+  <el-card class="box-card">
+    <template #header>
+      <div class="card-header">
+        <span>Contact Information</span>
+      </div>
+    </template>
+
+    <p>
+      Email:
+      <el-link type="primary" href="mailto:yong11021@outlook.com"
+        >yong11021@outlook.com</el-link
+      >
+    </p>
+  </el-card>
 </template>
 
 <style>
