@@ -1,6 +1,9 @@
 <script lang="ts" setup>
 import { ref, onMounted } from "vue";
 import { ElNotification } from "element-plus";
+import { el, tr } from "element-plus/es/locale";
+import api from "@/utils/api";
+
 let storageCache = {};
 
 const config = ref({
@@ -12,10 +15,9 @@ const config = ref({
 });
 
 onMounted(() => {
-  chrome.storage.sync.get("config").then((items) => {
+  chrome.storage.local.get("config").then((items) => {
     Object.assign(storageCache, items);
     console.log("items", items);
-    console.log("storageCache", storageCache);
     if (storageCache && storageCache.config) {
       config.value = Object.assign({}, config.value, storageCache.config);
     } else {
@@ -25,7 +27,7 @@ onMounted(() => {
 });
 
 function save() {
-  chrome.storage.sync.set({ config: config.value }).then(() => {
+  chrome.storage.local.set({ config: config.value }).then(() => {
     ElNotification({
       title: "Success",
       message: "Config saved",
@@ -33,6 +35,52 @@ function save() {
       position: "bottom-right",
     });
   });
+}
+
+function depthFirstTraversal(parent, node, callback) {
+  callback(parent, node);
+  node.children &&
+    node.children.forEach((child) => {
+      depthFirstTraversal(node, child, callback);
+    });
+}
+
+function initialize() {
+  chrome.bookmarks.getTree(async (tree: any[]) => {
+    const dateModifiedList = [];
+    const jsonString = JSON.stringify(tree, null, 1);
+    const formData: FormData = new FormData();
+    formData.append("file", new Blob([jsonString]));
+    const response = await api.upload(formData);
+
+    if (response.data.code !== 2000) {
+      return;
+    }
+
+    api.initialize().then((response) => {
+      if (response.data.code === 2000) {
+        ElNotification({
+          title: "Success",
+          message: "Initialize completed",
+          type: "success",
+          position: "bottom-right",
+        });
+      }
+    });
+
+    depthFirstTraversal(null, tree[0], (parent, node) => {
+      dateModifiedList.push([
+        String(node.id),
+        { dateModified: node.dateAdded, deleted: 0 },
+      ]);
+    });
+    chrome.storage.local.set({ dateModifiedList: [...dateModifiedList] });
+  });
+}
+
+async function synchronize() {
+  const response = await chrome.runtime.sendMessage({ command: "doubleSync" });
+  console.log(response);
 }
 </script>
 <template>
@@ -56,6 +104,22 @@ function save() {
             <th>Control</th>
           </thead>
           <tbody>
+            <tr>
+              <td label="Name">Synchronize</td>
+              <td label="Description">-</td>
+              <td label="Default" :span="2">-</td>
+              <td label="Control">
+                <el-button type="primary" @click="synchronize">Synchronize</el-button>
+              </td>
+            </tr>
+            <tr>
+              <td label="Name">Initialize</td>
+              <td label="Description">Initialize data</td>
+              <td label="Default" :span="2">-</td>
+              <td label="Control">
+                <el-button type="primary" @click="initialize">Initialize</el-button>
+              </td>
+            </tr>
             <tr>
               <td label="Name">Sync</td>
               <td label="Description">Enable synchronization</td>

@@ -17,7 +17,7 @@ const handleClose = (key: string, keyPath: string[]) => {
   <div class="factory-layout">
     <!-- 顶部标题 -->
     <el-header class="header">
-      <h2>Bookmarks Connecter</h2>
+      <!-- <h2>BookmarksBridge</h2> -->
     </el-header>
     <!-- 侧边栏 -->
     <el-aside class="sidebar">
@@ -89,6 +89,10 @@ el-menu .el-menu-vertical-demo:not(.el-menu--collapse) {
   width: 800px;
   height: 100%;
   padding: 0;
+  background: url(./assets/logo.png);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-blend-mode: lighten;
 }
 .container {
   padding-left: 80px;

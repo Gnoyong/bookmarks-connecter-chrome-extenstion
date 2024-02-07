@@ -5,8 +5,8 @@
       <div class="card-header">
         <span>Online</span>
       </div>
-      <el-tree :data="data" :props="defaultProps" @node-click="handleNodeClick" />
     </template>
+    <el-tree :data="data" :props="defaultProps" @node-click="handleNodeClick" />
   </el-card>
 </template>
 <script lang="ts" setup>
@@ -27,15 +27,15 @@ onMounted(() => {
 
     // 将每个项按照其 id 存储在一个对象中，方便后续通过 id 查找
     rows.forEach((item) => {
-      itemMap[item.id] = { id: item.id, label: item.name, children: [] };
+      itemMap[item.chrome_id] = { id: item.chrome_id, label: item.name, children: [] };
     });
 
     // 将每个项连接到其父节点的 children 数组中
     rows.forEach((item) => {
       if (item.parent_id !== 0 && itemMap[item.parent_id]) {
-        itemMap[item.parent_id].children.push(itemMap[item.id]);
+        itemMap[item.parent_id].children.push(itemMap[item.chrome_id]);
       } else {
-        data.value.push(itemMap[item.id]);
+        data.value.push(itemMap[item.chrome_id]);
       }
     });
   });

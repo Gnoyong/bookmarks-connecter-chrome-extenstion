@@ -13,7 +13,7 @@ const api = {
             console.error('There has been a problem with your fetch operation:', error);
         }
     },
-    async update(updateInfo, succesCallback) {
+    async update(updateInfo) {
         try {
             const response = await fetch(`${host}/bookmark`, {
                 method: 'PUT',
@@ -22,9 +22,27 @@ const api = {
                 },
                 body: JSON.stringify({
                     id: updateInfo.id,
-                    name: updateInfo.name,
+                    name: updateInfo.title,
                     url: updateInfo.url,
-                    parent_id: updateInfo.parent_id
+                    parentId: updateInfo.parentId,
+                    dateModified: updateInfo.dateModified
+                }),
+
+            })
+            return response;
+        } catch (error) {
+            console.error('There has been a problem with your fetch operation:', error);
+        }
+    },
+    async updateChromeId(id, chromeId) {
+        try {
+            const response = await fetch(`${host}/bookmark/${id}/chromeId`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    chromeId: chromeId,
                 }),
 
             })
@@ -56,7 +74,8 @@ const api = {
                     name: bookmark.title,
                     url: bookmark.url,
                     parent_id: bookmark.parentId,
-                    date_added: bookmark.dateAdded
+                    date_added: bookmark.dateAdded,
+                    date_modified: bookmark.dateModified
                 })
             })
             return response;
