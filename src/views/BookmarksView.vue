@@ -4,14 +4,23 @@
     <template #header>
       <div class="card-header">
         <span>Online</span>
+        <el-button class="button" type="primary" text bg @click="deleteRepeat"
+          >Remove duplicate</el-button
+        >
       </div>
     </template>
-    <el-tree :data="data" :props="defaultProps" @node-click="handleNodeClick" />
+    <el-tree
+      :data="data"
+      :props="defaultProps"
+      @node-click="handleNodeClick"
+      default-expand-all="true"
+    />
   </el-card>
 </template>
 <script lang="ts" setup>
 import api from "@/utils/api.js";
 import { ref, onMounted } from "vue";
+import { ElNotification } from "element-plus";
 
 interface Tree {
   id: number;
@@ -21,7 +30,7 @@ interface Tree {
 
 const data = ref<Tree[]>([]);
 onMounted(() => {
-  api.query().then((response) => {
+  api.queryView().then((response) => {
     const rows = response.data.result;
     const itemMap = {};
 
@@ -32,12 +41,13 @@ onMounted(() => {
 
     // 将每个项连接到其父节点的 children 数组中
     rows.forEach((item) => {
-      if (item.parent_id !== 0 && itemMap[item.parent_id]) {
+      if (item.parent_id !== "0" && itemMap[item.parent_id]) {
         itemMap[item.parent_id].children.push(itemMap[item.chrome_id]);
       } else {
         data.value.push(itemMap[item.chrome_id]);
       }
     });
+    console.log(data.value);
   });
 });
 
@@ -50,6 +60,17 @@ const defaultProps = {
   children: "children",
   label: "label",
 };
+
+async function deleteRepeat() {
+  const response = await chrome.runtime.sendMessage({
+    command: "removeDuplicateBookmarks",
+  });
+  ElNotification({
+    type: "success",
+    position: "bottom-right",
+    message: "The duplicate bookmarks have been successfully removed.",
+  });
+}
 </script>
 <style lang="css">
 h1 {

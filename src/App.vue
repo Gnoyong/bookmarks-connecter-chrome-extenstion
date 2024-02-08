@@ -15,27 +15,27 @@ const handleClose = (key: string, keyPath: string[]) => {
 </script>
 <template>
   <div class="factory-layout">
-    <!-- 顶部标题 -->
     <el-header class="header">
-      <!-- <h2>BookmarksBridge</h2> -->
+      <h2>BookmarksBridge</h2>
+      <el-space>
+        <el-tag type="primary">On Sync</el-tag>
+        <el-text class="mx-1 username">yong11021@outlook.com</el-text>
+      </el-space>
     </el-header>
-    <!-- 侧边栏 -->
     <el-aside class="sidebar">
       <el-menu
-        default-active="2"
+        default-active="1"
         class="el-menu-vertical-demo"
         :collapse="isCollapse"
         @open="handleOpen"
         @close="handleClose"
       >
-        <h1>Options</h1>
-        <el-divider />
         <el-menu-item index="1" @click="goto('/general')">
           <el-icon><Operation /></el-icon>
           <template #title>General</template>
         </el-menu-item>
         <el-menu-item index="2" @click="goto('/bookmarks')">
-          <el-icon><Collection /></el-icon>
+          <el-icon><CollectionTag /></el-icon>
           <template #title>Bookmarks</template>
         </el-menu-item>
         <el-menu-item index="3" @click="goto('/changelog')">
@@ -43,7 +43,7 @@ const handleClose = (key: string, keyPath: string[]) => {
           <template #title>Changelog</template>
         </el-menu-item>
         <el-menu-item index="4" @click="goto('/about')">
-          <el-icon><More /></el-icon>
+          <el-icon><Help /></el-icon>
           <template #title>About</template>
         </el-menu-item>
       </el-menu>
@@ -79,6 +79,9 @@ el-menu .el-menu-vertical-demo:not(.el-menu--collapse) {
   height: 60px;
   width: 100%;
   border-bottom: solid 1px var(--el-menu-border-color);
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 40px;
 }
 
 .sidebar {
@@ -98,5 +101,8 @@ el-menu .el-menu-vertical-demo:not(.el-menu--collapse) {
   padding-left: 80px;
   padding-top: 20px;
   width: 900px;
+}
+
+.username {
 }
 </style>

@@ -1,6 +1,6 @@
 <template>
   <h1>Changelog</h1>
-  <el-card class="box-card">
+  <!--   <el-card class="box-card">
     <template #header>
       <div class="card-header">
         <span>Unsynchronized Changes</span>
@@ -15,7 +15,7 @@
         </template>
       </el-table-column>
     </el-table>
-  </el-card>
+  </el-card> -->
   <el-card class="box-card">
     <template #header>
       <div class="card-header">
@@ -37,7 +37,6 @@
 <script lang="ts" setup>
 import { ref, onMounted } from "vue";
 
-const changelog = ref([]);
 const history = ref([]);
 
 onMounted(() => {
@@ -46,7 +45,6 @@ onMounted(() => {
 
 function loop() {
   chrome.storage.sync.get().then((items) => {
-    changelog.value = [...items.changelog];
     history.value = [...items.history];
   });
   setTimeout(loop, 3000);

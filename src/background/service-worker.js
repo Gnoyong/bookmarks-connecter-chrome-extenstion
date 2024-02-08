@@ -1,274 +1,307 @@
-importScripts('./api.js');
+/* global storage, api*/
+/* eslint-env node */
 
-let changelog = []
-let history = []
-let config = {}
-
-const storage = {
-    initStorageCache: chrome.storage.local.get().then((items) => {
-        changelog = [...items.changelog]
-        config = { ...items.config }
-        history = [...items.history]
-        dateModifiedMap.data = new Map(items.dateModifiedList)
-    }),
-    async get(field) {
-        const items = await chrome.storage.local.get(field)
-        return items['field']
-    },
-}
-
-const dateModifiedMap = {
-    data: null,
-    lock: false,
-    async set(key, value) {
-        try {
-            await storage.initStorageCache
-            if (this.lock) {
-                while (this.lock) {
-                    await sleep(50)
-                }
-            }
-            this.lock = true
-            if (this.data.size > 1000) {
-                throw new Error('状态数量异常')
-            }
-            this.data.set(String(key), value)
-            let dateModifiedList = []
-            this.data.forEach((v, k) => {
-                dateModifiedList.push([k, v])
-            });
-            await chrome.storage.local.set({ dateModifiedList: [...dateModifiedList] })
-            console.log('set', key, value);
-        } catch (err) {
-            console.error('Error when save dateModifiedMap:', err);
-        } finally {
-            this.lock = false
-        }
-    },
-    async delete(key) {
-        try {
-            await storage.initStorageCache
-            if (this.lock) {
-                while (this.lock) {
-                    await sleep(50)
-                }
-            }
-            this.lock = true
-            this.data.delete(String(key))
-            let dateModifiedList = []
-            this.data.forEach((v, k) => {
-                dateModifiedList.push([k, v])
-            });
-            await chrome.storage.local.set({ dateModifiedList: [...dateModifiedList] })
-        } catch (err) {
-            console.error('Error when delete the key of dateModifiedMap:', err);
-        } finally {
-            this.lock = false
-        }
-    }
-
-}
-
-function saveToStoreage() {
-    chrome.storage.local.set({ changelog: [...changelog], history: [...history] })
-}
+// eslint-disable-next-line no-undef
+importScripts('./api.js', './storage.js')
 
 const Types = {
-    CHANGED: 'changed',
-    MOVED: 'moved',
-    REMOVED: 'removed',
-    CREATED: 'created'
-};
+  CHANGED: 'changed',
+  MOVED: 'moved',
+  REMOVED: 'removed',
+  CREATED: 'created'
+}
 
 chrome.storage.onChanged.addListener((changes, namespace) => {
-    for (let [key, { oldValue, newValue }] of Object.entries(changes)) {
-        if (key === 'config')
-            config = { ...newValue }
+  for (let [key, { oldValue, newValue }] of Object.entries(changes)) {
+    if (key === 'config') storage.config = { ...newValue }
+  }
+})
+
+chrome.bookmarks.onChanged.addListener((id, info) => {
+  // storage.changelog.push({ type: Types.CHANGED, id, info })
+  storage.history.push({ type: Types.CHANGED, id, info })
+  storage.nodeStatusMap.set(id, Date.now(), 0)
+  storage.saveAll()
+})
+
+chrome.bookmarks.onMoved.addListener((id, info) => {
+  // storage.changelog.push({ type: Types.MOVED, id, info })
+  storage.history.push({ type: Types.MOVED, id, info })
+  storage.nodeStatusMap.set(id, Date.now(), 0)
+  storage.saveAll()
+})
+
+chrome.bookmarks.onRemoved.addListener((id, info) => {
+  // storage.changelog.push({ type: Types.REMOVED, id, info })
+  storage.history.push({ type: Types.REMOVED, id, info })
+  storage.nodeStatusMap.set(id, Date.now(), 1)
+  storage.saveAll()
+})
+
+chrome.bookmarks.onCreated.addListener((id, bookmark) => {
+  // storage.changelog.push({ type: Types.CREATED, id, info: bookmark })
+  storage.history.push({ type: Types.CREATED, id, info: bookmark })
+  storage.nodeStatusMap.set(id, Date.now(), 0)
+  storage.saveAll()
+})
+
+chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+  if (request.command === 'doubleSync') {
+    doubleSync()
+    sendResponse({ message: 'ok' })
+  } else if (request.command === 'initialize') {
+    initializeUserdata().then((code) => sendResponse({ code }))
+  } else if (request.command === 'removeDuplicateBookmarks') {
+    removeDuplicateBookmarks()
+    sendResponse({ code: 2000 })
+  }
+  return true
+})
+
+const removeDuplicateBookmarks = () => {
+  chrome.bookmarks.getTree(function (bookmarkTreeNodes) {
+    if (chrome.runtime.lastError) {
+      console.error(chrome.runtime.lastError.message)
+      return
     }
-});
 
-chrome.bookmarks.onChanged.addListener(
-    (id, info) => {
-        changelog.push({ type: Types.CHANGED, id, info })
-        history.push({ type: Types.CHANGED, id, info })
-        dateModifiedMap.set(id, { dateModified: Date.now(), deleted: 0 })
-        saveToStoreage()
-    }
-)
+    const allBookmarks = []
 
-chrome.bookmarks.onMoved.addListener(
-    (id, info) => {
-        changelog.push({ type: Types.MOVED, id, info })
-        history.push({ type: Types.MOVED, id, info })
-        dateModifiedMap.set(id, { dateModified: Date.now(), deleted: 0 })
-        saveToStoreage()
-    }
-)
-
-chrome.bookmarks.onRemoved.addListener(
-    (id, info) => {
-        changelog.push({ type: Types.REMOVED, id, info })
-        history.push({ type: Types.REMOVED, id, info })
-        dateModifiedMap.set(id, { dateModified: Date.now(), deleted: 1 })
-        saveToStoreage()
-    }
-)
-
-chrome.bookmarks.onCreated.addListener(
-    (id, bookmark) => {
-        changelog.push({ type: Types.CREATED, id, info: bookmark })
-        history.push({ type: Types.CREATED, id, info: bookmark })
-        console.log('onCreated set', id, { dateModified: Date.now(), deleted: 0 });
-        dateModifiedMap.set(id, { dateModified: Date.now(), deleted: 0 })
-        saveToStoreage()
-    },
-)
-
-forwardSync = async () => {
-    while (changelog[0] && config.sync.enable) {
-        let log = changelog[0]
-        try {
-            if (log.type === Types.CHANGED) {
-                let response = await api.update({
-                    id: log.id,
-                    name: log.info.title,
-                    url: log.info.url
-                })
-                if (!response.message == "ok") {
-                    throw Error('error')
-                }
-            } else if (log.type === Types.MOVED) {
-                let response = await api.update({ id: log.id, parent_id: log.info.parentId })
-                if (!response.message == "ok") {
-                    throw Error('error')
-                }
-            } else if (log.type === Types.REMOVED) {
-                let response = await api.delete(log.id)
-                if (!response.message == "ok") {
-                    throw Error('error')
-                }
-            } else if (log.type === Types.CREATED) {
-                let response = await api.add({ id: log.id, ...log.info });
-                if (!response.message == "ok") {
-                    throw Error('error')
-                }
-            }
-            changelog.shift()
-            await saveToStoreage()
-        } catch (error) {
-            await sleep(config.sync.retryInterval)
+    // 递归遍历书签树
+    function traverse(bookmarkNodes) {
+      for (let node of bookmarkNodes) {
+        if (node.url) {
+          // 如果是书签，则将其添加到 allBookmarks 数组中
+          allBookmarks.push({ id: node.id, url: node.url })
+        } else if (node.children) {
+          // 如果是文件夹，则递归遍历其子节点
+          traverse(node.children)
         }
+      }
     }
+
+    // 遍历书签树
+    traverse(bookmarkTreeNodes)
+
+    // 找出重复的书签
+    const uniqueBookmarks = {}
+    const duplicateBookmarks = []
+
+    allBookmarks.forEach((bookmark) => {
+      if (uniqueBookmarks[bookmark.url]) {
+        duplicateBookmarks.push(bookmark.id)
+      } else {
+        uniqueBookmarks[bookmark.url] = true
+      }
+    })
+
+    // 删除重复的书签
+    duplicateBookmarks.forEach((bookmarkId) => {
+      chrome.bookmarks.remove(bookmarkId, function () {
+        if (chrome.runtime.lastError) {
+          console.error(chrome.runtime.lastError.message)
+          return
+        }
+        console.log('已删除重复的书签:', bookmarkId)
+      })
+    })
+  })
 }
 
-chrome.runtime.onMessage.addListener(
-    function (request, sender, sendResponse) {
-        console.log(sender.tab ?
-            "from a content script:" + sender.tab.url :
-            "from the extension");
-        console.log(request);
-        if (request.command === "doubleSync") {
-            sendResponse({ message: "ok" });
-            doubleSync()
-        }
-    }
-);
+const initializeUserdata = async function () {
+  const tree = await chrome.bookmarks.getTree()
+  const nodeStatus = []
+  const jsonString = JSON.stringify(tree, null, 1)
+  const formData = new FormData()
+  formData.append('file', new Blob([jsonString]))
+  const upload = await api
+    .upload(formData)
+    .then((response) => response.json())
+    .then((json) => {
+      return json
+    })
+  if (upload.code != 2000) {
+    return 4001
+  }
+  const init = await api
+    .initialize()
+    .then((response) => response.json())
+    .then((json) => {
+      return json
+    })
+  if (init.code != 2000) {
+    return 4001
+  }
+  function depthFirstTraversal(parent, node, callback) {
+    callback(parent, node)
+    node.children &&
+      node.children.forEach((child) => {
+        depthFirstTraversal(node, child, callback)
+      })
+  }
+  depthFirstTraversal(null, tree[0], (parent, node) => {
+    nodeStatus.push({ id: node.id, dateModified: node.dateAdded, deleted: 0 })
+  })
+  storage.nodeStatusMap.init(nodeStatus)
+  return 2000
+}
 
 const doubleSync = async () => {
-    chrome.storage.local.get().then((items) => {
-        let dateModifiedList;
-        dateModifiedList = new Map(items.dateModifiedList);
-        api.query()
+  function action(items) {
+    api
+      .query()
+      .then((response) => response.json())
+      .then((json) => sync(json, items))
+  }
+  function sync(json, items) {
+    const localNodeStatus = new Map(items.dateModifiedList)
+    const remoteNodeStatus = new Map()
+    const remoteNodes = json.result
+    remoteNodes.forEach((element) => {
+      remoteNodeStatus.set(element.chrome_id, {
+        dateModified: element.date_modified,
+        deleted: element.deleted
+      })
+    })
+    // 处理本地数据，上传新增数据
+    localNodeStatus.forEach(async (value, key) => {
+      const chromeId = String(key)
+      if (value.deleted) {
+        return
+      }
+      if (!remoteNodeStatus.has(chromeId)) {
+        try {
+          const node = await chrome.bookmarks.get(chromeId)
+          await api.add({ ...node[0], dateModified: value.dateModified })
+        } catch (err) {
+          console.error('不存在节点，删除异常数据', chromeId)
+          storage.nodeStatusMap.delete(chromeId)
+          await storage.saveAll()
+        }
+      }
+    })
+    // 处理远程数据
+    remoteNodes.forEach(async (remoteNode) => {
+      const chromeId = remoteNode.chrome_id
+      const localStatus = localNodeStatus.get(chromeId)
+      if (chromeId == '0' || chromeId == '1') return
+      if (localStatus.deleted && remoteNode.deleted) return
+      let localNode = null
+      try {
+        localNode = await chrome.bookmarks.get(chromeId)
+      } catch (err) {
+        console.error('error when get bookmark:', err)
+      }
+      if (!localStatus && localNode) {
+        console.error('本地节点缺少状态数据', localNode)
+        return
+      }
+      if (!localNode && !localStatus.deleted) {
+        console.error('本地状态数据异常', localStatus)
+        return
+      }
+      // 同步远程新增节点
+      if (!localStatus && !remoteNode.chrome_id && !remoteNode.deleted) {
+        console.log('恢复节点', remoteNode)
+        chrome.bookmarks.create(
+          {
+            parentId: String(remoteNode.parent_id),
+            title: remoteNode.name,
+            url: remoteNode.url
+          },
+          (freshNode) => {
+            api
+              .updateChromeId(remoteNode.id, freshNode.id)
+              .then((response) => response.json())
+              .then((json) => {
+                if (json.code != 2000) throw Error('出错了')
+                storage.nodeStatusMap.delete(chromeId)
+                storage.nodeStatusMap.set(freshNode.id, {
+                  dateModified: remoteNode.date_modified,
+                  deleted: remoteNode.deleted
+                })
+              })
+          }
+        )
+        // 不在处理更新逻辑
+        return
+      }
+      if (localStatus.dateModified > remoteNode.date_modified) {
+        if (localStatus.deleted) {
+          console.log('本地删除了节点', chromeId)
+          api
+            .delete(chromeId)
             .then((response) => response.json())
-            .then(json => {
-                const onlineData = new Map();
-                json.result.forEach((element) => {
-                    if (!element.chrome_id && !element.deleted) {
-                        console.log("数据库新增了节点", element);
-                        chrome.bookmarks.create({
-                            parentId: String(element.parent_id),
-                            title: element.name,
-                            url: element.url
-                        }, (node) => {
-                            api.updateChromeId(element.id, node.id)
-                                .then(response => response.json())
-                                .then(json => {
-                                    if (json.code != 2000) throw Error('出错了')
-                                    dateModifiedMap.set(node.id, { dateModified: element.date_modified, deleted: 0 })
-                                })
-                        })
-                        return
-                    }
-                    onlineData.set(element.chrome_id, { dateModified: element.date_modified, deleted: element.deleted });
-                });
-                // 上传新增节点
-                dateModifiedList.forEach(async (value, key) => {
-                    key = String(key)
-                    if (!value) {
-                        console.log(key, value);
-                    }
-                    if (value.deleted) {
-                        return
-                    }
-                    if (!onlineData.has(String(key))) {
-                        try {
-                            const node = await chrome.bookmarks.get(String(key))
-                            console.log("需要上传节点", key, node);
-                            let response = await api.add({ ...node[0], dateModified: value.dateModified });
-                            if (!response.message == "ok") {
-                                throw Error('error')
-                            }
-                        } catch (err) {
-                            dateModifiedMap.delete(key)
-                            await saveToStoreage()
-                            console.error("不存在的节点", key);
-                            return
-                        }
-                    }
-                });
-
-                onlineData.forEach(async (value, key) => {
-                    key = String(key)
-                    const local = dateModifiedList.get(key)
-                    if (local.deleted && local.dateModified > value.dateModified) {
-                        console.log("本地删除了节点", key);
-                        api.delete(key).then(response => response.json()).then(json => {
-                            if (json.code != 2000)
-                                console.log('出错了');
-                        })
-                    } else if (local.dateModified > value.dateModified) {
-                        const node = await chrome.bookmarks.get(String(key))
-                        console.log("本地更新了节点", key);
-                        const response = await api.update({ ...node[0], dateModified: local.dateModified })
-                        const json = await response.json()
-                        if (json.code != 2000) {
-                            throw new Error('出错了');
-                        }
-                    } else if (local.dateModified < value.dateModified) {
-                        if (local.deleted) return
-                        console.log("数据库更新了节点", key);
-                    }
-                });
-
-            });
-    });
-}
-
-const sleep = (ms) => {
-    return new Promise(resolve => setTimeout(resolve, ms));
+            .then((json) => {
+              if (json.code != 2000) console.log('出错了')
+            })
+        } else {
+          console.log('本地更新了节点', chromeId)
+          const response = await api.update({
+            ...localNode[0],
+            dateModified: localStatus.dateModified
+          })
+          const json = await response.json()
+          if (json.code != 2000) {
+            throw new Error('出错了')
+          }
+        }
+      } else if (localStatus.dateModified < remoteNode.date_modified) {
+        console.log('数据库更新了节点', chromeId)
+        if (localStatus.deleted && !remoteNode.deleted) {
+          chrome.bookmarks.create(
+            {
+              parentId: String(remoteNode.parent_id),
+              title: remoteNode.name,
+              url: remoteNode.url
+            },
+            (freshNode) => {
+              api
+                .updateChromeId(remoteNode.id, freshNode.id)
+                .then((response) => response.json())
+                .then((json) => {
+                  if (json.code != 2000) throw Error('出错了')
+                  storage.nodeStatusMap.set(freshNode.id, {
+                    dateModified: remoteNode.date_modified,
+                    deleted: remoteNode.deleted
+                  })
+                })
+            }
+          )
+        } else {
+          if (remoteNode.deleted) {
+            try {
+              chrome.bookmarks.remove(chromeId)
+            } catch (err) {
+              console.error('remove bookmarks error:', err)
+            }
+          } else {
+            try {
+              chrome.bookmarks.update(chromeId, { title: remoteNode.name, url: remoteNode.url })
+            } catch (err) {
+              console.error('update bookmarks error:', err)
+            }
+          }
+        }
+      }
+    })
+  }
+  chrome.storage.local.get().then((items) => action(items))
 }
 
 const initialize = async () => {
-    try {
-        await storage.initStorageCache
-    } catch (e) {
-        console.error('load cache faild', e);
+  try {
+    await storage.initialize()
+  } catch (e) {
+    console.error('load cache faild', e)
+  }
+  const loop = async () => {
+    if (storage.config.sync.enable) {
+      await doubleSync()
     }
-    const loop = async () => {
-        await forwardSync()
-        setTimeout(loop, 3000);
-    }
-    loop();
+    setTimeout(loop, storage.config.sync.retryInterval)
+  }
+  loop()
 }
 
 initialize()

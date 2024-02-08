@@ -37,45 +37,17 @@ function save() {
   });
 }
 
-function depthFirstTraversal(parent, node, callback) {
-  callback(parent, node);
-  node.children &&
-    node.children.forEach((child) => {
-      depthFirstTraversal(node, child, callback);
+async function initialize() {
+  const response = await chrome.runtime.sendMessage({ command: "initialize" });
+  console.log(response);
+  if (response.code === 2000) {
+    ElNotification({
+      title: "Success",
+      message: "Initialize completed",
+      type: "success",
+      position: "bottom-right",
     });
-}
-
-function initialize() {
-  chrome.bookmarks.getTree(async (tree: any[]) => {
-    const dateModifiedList = [];
-    const jsonString = JSON.stringify(tree, null, 1);
-    const formData: FormData = new FormData();
-    formData.append("file", new Blob([jsonString]));
-    const response = await api.upload(formData);
-
-    if (response.data.code !== 2000) {
-      return;
-    }
-
-    api.initialize().then((response) => {
-      if (response.data.code === 2000) {
-        ElNotification({
-          title: "Success",
-          message: "Initialize completed",
-          type: "success",
-          position: "bottom-right",
-        });
-      }
-    });
-
-    depthFirstTraversal(null, tree[0], (parent, node) => {
-      dateModifiedList.push([
-        String(node.id),
-        { dateModified: node.dateAdded, deleted: 0 },
-      ]);
-    });
-    chrome.storage.local.set({ dateModifiedList: [...dateModifiedList] });
-  });
+  }
 }
 
 async function synchronize() {
@@ -105,6 +77,14 @@ async function synchronize() {
           </thead>
           <tbody>
             <tr>
+              <td label="Name">Sync</td>
+              <td label="Description">Enable synchronization</td>
+              <td label="Default" :span="2">Disable</td>
+              <td label="Control">
+                <el-switch v-model="config.sync.enable" />
+              </td>
+            </tr>
+            <tr>
               <td label="Name">Synchronize</td>
               <td label="Description">-</td>
               <td label="Default" :span="2">-</td>
@@ -118,14 +98,6 @@ async function synchronize() {
               <td label="Default" :span="2">-</td>
               <td label="Control">
                 <el-button type="primary" @click="initialize">Initialize</el-button>
-              </td>
-            </tr>
-            <tr>
-              <td label="Name">Sync</td>
-              <td label="Description">Enable synchronization</td>
-              <td label="Default" :span="2">Disable</td>
-              <td label="Control">
-                <el-switch v-model="config.sync.enable" />
               </td>
             </tr>
             <tr>
